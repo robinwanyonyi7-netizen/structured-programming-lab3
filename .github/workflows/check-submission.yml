@@ -1,0 +1,172 @@
+name: Check Lab 3 Submission
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  check-submission:
+    name: Validate submission
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      # ── Check 1: Required files exist ──────────────────────────────────
+      - name: Check required files are present
+        id: files
+        run: |
+          MISSING=()
+          for f in lab3_task1.php lab3_task2.php lab3_task3.php lab3_task4.php; do
+            if [ ! -f "$f" ] && [ ! -f "starter/$f" ]; then
+              MISSING+=("$f")
+            fi
+          done
+
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "status=fail" >> $GITHUB_OUTPUT
+            echo "MISSING_FILES=${MISSING[*]}" >> $GITHUB_OUTPUT
+            echo "::error::Missing required files: ${MISSING[*]}"
+          else
+            echo "status=pass" >> $GITHUB_OUTPUT
+            echo "All required files found."
+          fi
+
+      # ── Check 2: PHP syntax validation ─────────────────────────────────
+      - name: PHP syntax check (php -l)
+        id: syntax
+        run: |
+          ERRORS=()
+          for f in lab3_task1.php lab3_task2.php lab3_task3.php lab3_task4.php; do
+            TARGET=""
+            [ -f "$f" ] && TARGET="$f"
+            [ -f "starter/$f" ] && TARGET="starter/$f"
+            if [ -n "$TARGET" ]; then
+              if ! php -l "$TARGET" > /dev/null 2>&1; then
+                ERRORS+=("$TARGET")
+                php -l "$TARGET" || true
+              fi
+            fi
+          done
+
+          if [ ${#ERRORS[@]} -gt 0 ]; then
+            echo "status=fail" >> $GITHUB_OUTPUT
+            echo "::error::PHP syntax errors in: ${ERRORS[*]}"
+          else
+            echo "status=pass" >> $GITHUB_OUTPUT
+            echo "All files pass PHP syntax check."
+          fi
+
+      # ── Check 3: File headers contain student info ──────────────────────
+      - name: Check file headers for student info
+        id: headers
+        run: |
+          MISSING_HEADERS=()
+          for f in lab3_task1.php lab3_task2.php lab3_task3.php lab3_task4.php; do
+            TARGET=""
+            [ -f "$f" ] && TARGET="$f"
+            [ -f "starter/$f" ] && TARGET="starter/$f"
+            if [ -n "$TARGET" ]; then
+              if ! grep -qi "@student" "$TARGET"; then
+                MISSING_HEADERS+=("$TARGET")
+              fi
+              if grep -qi "\[Your Reg Number\]" "$TARGET"; then
+                MISSING_HEADERS+=("$TARGET (placeholder not replaced)")
+              fi
+            fi
+          done
+
+          if [ ${#MISSING_HEADERS[@]} -gt 0 ]; then
+            echo "status=fail" >> $GITHUB_OUTPUT
+            echo "::warning::Headers missing or incomplete in: ${MISSING_HEADERS[*]}"
+          else
+            echo "status=pass" >> $GITHUB_OUTPUT
+            echo "File headers look good."
+          fi
+
+      # ── Check 4: Commit message format ─────────────────────────────────
+      - name: Check commit message convention
+        id: commits
+        run: |
+          LATEST_MSG=$(git log --oneline -1 HEAD | sed 's/^[a-f0-9]* //')
+          echo "Latest commit: $LATEST_MSG"
+          if echo "$LATEST_MSG" | grep -Eqi "feat:|fix:|lab3"; then
+            echo "status=pass" >> $GITHUB_OUTPUT
+            echo "Commit message format OK."
+          else
+            echo "status=warn" >> $GITHUB_OUTPUT
+            echo "::warning::Commit message should follow: 'feat: lab3 complete - REGNO/YEAR'"
+          fi
+
+      # ── Check 5: TODO stubs not left blank ─────────────────────────────
+      - name: Check that TODO stubs have been worked on
+        id: stubs
+        run: |
+          UNTOUCHED=0
+          for f in lab3_task1.php lab3_task2.php lab3_task3.php lab3_task4.php; do
+            TARGET=""
+            [ -f "$f" ] && TARGET="$f"
+            [ -f "starter/$f" ] && TARGET="starter/$f"
+            if [ -n "$TARGET" ]; then
+              TODO_COUNT=$(grep -c "TODO:.*your code here" "$TARGET" || true)
+              if [ "$TODO_COUNT" -gt 0 ]; then
+                UNTOUCHED=$((UNTOUCHED + TODO_COUNT))
+                echo "::warning::$TARGET still has $TODO_COUNT untouched TODO stub(s)"
+              fi
+            fi
+          done
+
+          if [ "$UNTOUCHED" -gt 0 ]; then
+            echo "status=warn" >> $GITHUB_OUTPUT
+          else
+            echo "status=pass" >> $GITHUB_OUTPUT
+            echo "No blank TODO stubs found."
+          fi
+
+      # ── Summary comment on PR ───────────────────────────────────────────
+      - name: Post results summary as PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const files   = '${{ steps.files.syntax }}' !== 'fail' ? '✅' : '❌';
+            const syntax  = '${{ steps.syntax.outputs.status }}' !== 'fail' ? '✅' : '❌';
+            const headers = '${{ steps.headers.outputs.status }}' === 'pass' ? '✅' : '⚠️';
+            const commits = '${{ steps.commits.outputs.status }}' === 'pass' ? '✅' : '⚠️';
+            const stubs   = '${{ steps.stubs.outputs.status }}' === 'pass' ? '✅' : '⚠️';
+
+            const allPass = syntax !== '❌' && files !== '❌';
+            const badge   = allPass ? '🟢 Ready for review' : '🔴 Issues found — please fix before deadline';
+
+            const body = `## ICS 2371 Lab 3 — Automated Check Results
+
+${badge}
+
+| Check | Result | Marks at stake |
+|---|---|---|
+| Required files present | ${files} | 2 |
+| PHP syntax valid | ${syntax} | 3 |
+| File headers with reg number | ${headers} | 1 |
+| Commit message format | ${commits} | 1 |
+| TODO stubs worked on | ${stubs} | 2 |
+| PR template filled | _(checked by lecturer)_ | 1 |
+
+> **Note:** ✅ = pass, ⚠️ = warning (marks may be deducted), ❌ = fail (marks lost).
+> Lecturer will review and confirm final marks after the deadline.
+
+_This is an automated check. Raise a GitHub Issue if you believe a result is incorrect._`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });

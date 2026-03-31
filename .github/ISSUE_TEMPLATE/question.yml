@@ -1,0 +1,45 @@
+name: Question
+description: Ask a question about Lab 3
+title: "[Q] "
+labels: ["question"]
+body:
+  - type: input
+    id: reg-number
+    attributes:
+      label: Registration number
+      placeholder: SCT212-XXXX/2024
+    validations:
+      required: true
+
+  - type: dropdown
+    id: task
+    attributes:
+      label: Which task is this about?
+      options:
+        - Task 1 — Warm-up exercises
+        - Task 2 — Grade Classification System
+        - Task 3 — switch-case and match
+        - Task 4 — Loan Eligibility Checker
+        - GitHub / submission process
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      description: Be specific. Paste any error messages or code snippets if relevant.
+      placeholder: "Describe what you tried, what you expected, and what happened..."
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before submitting
+      options:
+        - label: I have read the lab instructions on iLMS
+          required: true
+        - label: I have searched existing issues to check this hasn't been asked
+          required: true
