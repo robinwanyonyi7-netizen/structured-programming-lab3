@@ -6,18 +6,12 @@ on:
   workflow_dispatch:
 
 permissions:
-  pull-requests: write
-  issues: write
   contents: read
 
 jobs:
   check-submission:
     name: Validate submission
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
-      issues: write
-      contents: read
 
     steps:
       - name: Checkout PR branch
@@ -43,6 +37,7 @@ jobs:
             echo "::error::Missing required files: ${MISSING[*]}"
           else
             echo "status=pass" >> $GITHUB_OUTPUT
+            echo "::notice::All required files found"
           fi
 
       - name: PHP syntax check
@@ -65,6 +60,7 @@ jobs:
             echo "::error::PHP syntax errors in: ${ERRORS[*]}"
           else
             echo "status=pass" >> $GITHUB_OUTPUT
+            echo "::notice::All files pass PHP syntax check"
           fi
 
       - name: Check file headers for student info
@@ -86,18 +82,23 @@ jobs:
           done
           if [ ${#MISSING_HEADERS[@]} -gt 0 ]; then
             echo "status=warn" >> $GITHUB_OUTPUT
+            echo "::warning::Headers missing or incomplete in: ${MISSING_HEADERS[*]}"
           else
             echo "status=pass" >> $GITHUB_OUTPUT
+            echo "::notice::File headers look good"
           fi
 
       - name: Check commit message convention
         id: commits
         run: |
           LATEST_MSG=$(git log --oneline -1 HEAD | sed 's/^[a-f0-9]* //')
+          echo "Latest commit: $LATEST_MSG"
           if echo "$LATEST_MSG" | grep -Eqi "feat:|fix:|lab3"; then
             echo "status=pass" >> $GITHUB_OUTPUT
+            echo "::notice::Commit message format OK"
           else
             echo "status=warn" >> $GITHUB_OUTPUT
+            echo "::warning::Commit message should follow: feat: lab3 complete - REGNO/YEAR"
           fi
 
       - name: Check TODO stubs have been worked on
@@ -115,56 +116,59 @@ jobs:
           done
           if [ "$UNTOUCHED" -gt 0 ]; then
             echo "status=warn" >> $GITHUB_OUTPUT
+            echo "::warning::$UNTOUCHED untouched TODO stub(s) found"
           else
             echo "status=pass" >> $GITHUB_OUTPUT
+            echo "::notice::No blank TODO stubs found"
           fi
 
-      - name: Post results as PR comment
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const f = '${{ steps.files.outputs.status }}';
-            const s = '${{ steps.syntax.outputs.status }}';
-            const h = '${{ steps.headers.outputs.status }}';
-            const c = '${{ steps.commits.outputs.status }}';
-            const t = '${{ steps.stubs.outputs.status }}';
+      - name: Write results to Job Summary
+        if: always()
+        run: |
+          F="${{ steps.files.outputs.status }}"
+          S="${{ steps.syntax.outputs.status }}"
+          H="${{ steps.headers.outputs.status }}"
+          C="${{ steps.commits.outputs.status }}"
+          T="${{ steps.stubs.outputs.status }}"
 
-            const files   = f !== 'fail' ? ':white_check_mark:' : ':x:';
-            const syntax  = s !== 'fail' ? ':white_check_mark:' : ':x:';
-            const headers = h === 'pass' ? ':white_check_mark:' : ':warning:';
-            const commits = c === 'pass' ? ':white_check_mark:' : ':warning:';
-            const stubs   = t === 'pass' ? ':white_check_mark:' : ':warning:';
+          files_r=$( [ "$F" != "fail" ] && echo "✅" || echo "❌" )
+          syntax_r=$( [ "$S" != "fail" ] && echo "✅" || echo "❌" )
+          headers_r=$( [ "$H" = "pass" ] && echo "✅" || echo "⚠️" )
+          commits_r=$( [ "$C" = "pass" ] && echo "✅" || echo "⚠️" )
+          stubs_r=$( [ "$T" = "pass" ] && echo "✅" || echo "⚠️" )
 
-            const allPass = s !== 'fail' && f !== 'fail';
-            const badge = allPass
-              ? ':green_circle: Ready for review'
-              : ':red_circle: Issues found - please fix before deadline';
+          if [ "$S" != "fail" ] && [ "$F" != "fail" ]; then
+            BADGE="🟢 Ready for review"
+          else
+            BADGE="🔴 Issues found — student must fix before deadline"
+          fi
 
-            const lines = [
-              '## ICS 2371 Lab 3 - Automated Check Results',
-              '',
-              badge,
-              '',
-              '| Check | Result | Marks at stake |',
-              '|---|---|---|',
-              '| Required files present | ' + files + ' | 2 |',
-              '| PHP syntax valid | ' + syntax + ' | 3 |',
-              '| File headers with reg number | ' + headers + ' | 1 |',
-              '| Commit message format | ' + commits + ' | 1 |',
-              '| TODO stubs worked on | ' + stubs + ' | 2 |',
-              '| PR template filled | _(checked by lecturer)_ | 1 |',
-              '',
-              '> :white_check_mark: pass  :warning: warning (marks may be deducted)  :x: fail',
-              '> Lecturer will review and confirm final marks after the deadline.',
-              '',
-              '_Automated check. Raise a GitHub Issue if you believe a result is incorrect._'
-            ];
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## ICS 2371 Lab 3 — Automated Check Results
 
-            await github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: lines.join('\n')
-            });
+          **$BADGE**
+
+          | Check | Result | Marks at stake |
+          |---|---|---|
+          | Required files present | $files_r | 2 |
+          | PHP syntax valid | $syntax_r | 3 |
+          | File headers with reg number | $headers_r | 1 |
+          | Commit message format | $commits_r | 1 |
+          | TODO stubs worked on | $stubs_r | 2 |
+          | PR template filled | _(check manually)_ | 1 |
+
+          > ✅ pass · ⚠️ warning (marks may be deducted) · ❌ fail
+          >
+          > Review the Files changed tab and confirm final marks after the deadline.
+          EOF
+
+      - name: Fail job if critical checks failed
+        if: always()
+        run: |
+          F="${{ steps.files.outputs.status }}"
+          S="${{ steps.syntax.outputs.status }}"
+          if [ "$F" = "fail" ] || [ "$S" = "fail" ]; then
+            echo "Critical checks failed — files missing or PHP syntax errors present"
+            exit 1
+          fi
+          echo "All critical checks passed"
