@@ -3,54 +3,111 @@
  * ICS 2371 — Lab 3: Control Structures I
  * Task 3: switch-case and match Expression [6 marks]
  *
- * @author     [Your Full Name]
- * @student    [Your Reg Number, e.g. SCT212-XXXX/2024]
+ * @author     Robin Wanyonyi
+ * @student    ENE212-0208/2023
  * @lab        Lab 3 of 14
  * @unit       ICS 2371
- * @date       [Date completed]
+ * @date       02/04/2026
  */
 
 // ══════════════════════════════════════════════════════════════
 // EXERCISE A — Day of Week Classifier
 // ══════════════════════════════════════════════════════════════
-// Given $day (integer 1–7, where 1=Monday):
-// Use switch-case to print the day name.
-// Group Saturday and Sunday under "Weekend".
-// All weekdays print their name and "— Lecture day".
-// Remember: break is NOT optional. Missing break = fall-through.
 
-$day = 3; // change this to test all cases
+$day = 1; // change this to test all cases
+$day = 2;
+$day = 3;
+$day = 4; 
+$day = 5;
+$day = 6; 
+$day = 7;
 
 // TODO: switch-case for day classifier
+for ($day = 1; $day <= 7; $day++) {
+    switch ($day) {
+        case 1:
+            echo "Monday — Lecture day\n" . "<br>";
+            break;
+        case 2:
+            echo "Tuesday — Lecture day\n" . "<br>";
+            break;
+        case 3:
+            echo "Wednesday — Lecture day\n" . "<br>";
+            break;
+        case 4:
+            echo "Thursday — Lecture day\n" . "<br>";
+            break;
+        case 5:
+            echo "Friday — Lecture day\n" . "<br>";
+            break;
+        case 6:
+            echo "Saturday — Weekend\n" . "<br>";
+            break;
+        case 7:
+            echo "Sunday — Weekend\n" . "<br>";
+            break;
+        default:
+            echo "Invalid day. Please enter a number between 1 and 7.\n";
+    }
+}
 
+echo "<hr>";    
 
 // ══════════════════════════════════════════════════════════════
 // EXERCISE B — HTTP Status Code Explainer
 // ══════════════════════════════════════════════════════════════
-// Given $status_code, use switch-case to explain it:
-//   200 → "OK — request succeeded"
-//   301 → "Moved Permanently — resource relocated"
-//   400 → "Bad Request — client error"
-//   401 → "Unauthorized — authentication required"
-//   403 → "Forbidden — access denied"
-//   404 → "Not Found — resource missing"
-//   500 → "Internal Server Error — server fault"
-// default → "Unknown status code"
 
 $status_code = 404;
 
 // TODO: switch-case for HTTP status
+switch ($status_code) {
+    case 200:
+        echo "OK — request succeeded\n";
+        break;
+    case 301:
+        echo "Moved Permanently — resource relocated\n";
+        break;
+    case 400:
+        echo "Bad Request — client error\n";
+        break;
+    case 401:
+        echo "Unauthorized — authentication required\n";
+        break;
+    case 403:
+        echo "Forbidden — access denied\n";
+        break;
+    case 404:
+        echo "Not Found — resource missing\n";
+        break;
+    case 500:
+        echo "Internal Server Error — server fault\n";
+        break;
+    default:
+        echo "Unknown status code\n";
+}
 
+echo "<hr>";
 
 // ══════════════════════════════════════════════════════════════
 // EXERCISE C — PHP 8 match Expression
 // ══════════════════════════════════════════════════════════════
-// Rewrite Exercise B using PHP 8 match instead of switch-case.
-// Note: match uses STRICT comparison (===). No break needed.
-// Observe the difference in syntax and behaviour.
 
 // TODO: match expression for HTTP status — same logic as Exercise B
+$status_code = 404;
 
+$message = match($status_code) {
+    200 => "OK — request succeeded",
+    301 => "Moved Permanently — resource relocated",
+    400 => "Bad Request — client error",
+    401 => "Unauthorized — authentication required",
+    403 => "Forbidden — access denied",
+    404 => "Not Found — resource missing",
+    500 => "Internal Server Error — server fault",
+    default => "Unknown status code"
+};
+
+echo $message . "\n";
+echo "<<hr>";
 
 // ══════════════════════════════════════════════════════════════
 // EXERCISE D — Rewrite comparison
